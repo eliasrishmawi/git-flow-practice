@@ -1,0 +1,41 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:                                  # build ONCE
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4  # save the build so later jobs reuse it
+        with:
+          name: app-build
+          path: app.py
+
+  deploy-staging:
+    needs: build                          # runs only after build succeeds
+    runs-on: ubuntu-latest
+    environment: staging                  # staging secrets, no approval needed
+    concurrency: deploy-staging           # one staging deploy at a time
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-build
+      - run: echo "deploying to staging, key length is ${#API_KEY}"
+        env:
+          API_KEY: ${{ secrets.API_KEY }} # the staging value of API_KEY
+
+  deploy-production:
+    needs: deploy-staging                 # only after staging succeeded
+    runs-on: ubuntu-latest
+    environment: production               # production secrets, PAUSES for approval
+    concurrency: deploy-production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-build
+      - run: echo "deploying to production, key length is ${#API_KEY}"
+        env:
+          API_KEY: ${{ secrets.API_KEY }} # the production value of API_KEY
